@@ -179,7 +179,7 @@ class MainWindow(QMainWindow):
                     lambda count, time: self.variants_load_finished.emit(count, time)
                 )
                 widget.variant_changed.connect(
-                    lambda: self.selected_variant_changed.emit
+                    lambda: self.selected_variant_changed.emit()
                 )
                 LOGGER.debug("Connected variant view signals to mainwindow")
 
@@ -713,7 +713,7 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     def save_session(self):
-        """ save plugin state into a json file """
+        """save plugin state into a json file"""
 
         filename, _ = QFileDialog.getSaveFileName(
             self,
