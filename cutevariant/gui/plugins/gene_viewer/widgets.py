@@ -945,6 +945,8 @@ class GeneViewerWidget(plugin.PluginWidget):
 
         self.gene_name_combo.setCurrentText(self.selected_gene)
 
+        self.update_shown_variants()
+
     def open_annotations_database(self):
         """Initialize annotations database, i.e. open ensGene file and setup row factory"""
         self.annotations_conn = sqlite3.connect(self.annotations_file_name)
@@ -995,6 +997,9 @@ class GeneViewerWidget(plugin.PluginWidget):
         self.load_transcript_names()
 
     def on_selected_transcript_changed(self):
+        self.update_shown_variants()
+
+    def update_shown_variants(self):
         if self.selected_gene:
             filters = copy.deepcopy(self.mainwindow.state.filters)
             self.selected_transcript = self.transcript_name_combo.currentText()
@@ -1019,6 +1024,7 @@ class GeneViewerWidget(plugin.PluginWidget):
                     self.mainwindow.state.source,
                     filters,
                 )
+                print(filters)
 
                 self.view.gene.variants = [(variant["pos"], 0) for variant in variants]
 
@@ -1061,9 +1067,6 @@ class GeneViewerWidget(plugin.PluginWidget):
                     # ]
 
                     self.view.viewport().update()
-
-    def reset_gene(self):
-        pass
 
 
 if __name__ == "__main__":
