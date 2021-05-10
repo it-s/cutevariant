@@ -111,6 +111,26 @@ VARIANT_LOLLIPOP_COLOR_MAP = {
     2: QColor("#0000FF"),
 }
 
+# These come from the Cute formatter
+SO_COLOR = {
+    # https://natsukis.livejournal.com/2048.html
+    "missense_variant": "#bb96ff",
+    "synonymous_variant": "#67eebd",
+    "stop_gained": "#ed6d79",
+    "stop_lost": "#ed6d79",
+    "frameshift_variant": "#ff89b5",
+    "upstream_gene_variant": "#ff80bb",
+    "intron_variant": "#ffbb88",
+    "downstream_gene_variant": "#bb55ff",
+}
+
+IMPACT_COLOR = {
+    "HIGH": "#ff4b5c",
+    "LOW": "#056674",
+    "MODERATE": "#ecad7d",
+    "MODIFIER": "#ecad7d",
+}
+
 
 class Gene:
     """Class to hold a representation of a gene, with structural data and variant annotations.
@@ -178,11 +198,11 @@ class Gene:
         self._exon_ends = value
 
     @property
-    def variants(self) -> typing.List[typing.Tuple[int, int]]:
+    def variants(self) -> typing.List[typing.Tuple[dict]]:
         return self._variants
 
     @variants.setter
-    def variants(self, value: typing.List[typing.Tuple[int, int]]):
+    def variants(self, value: typing.List[typing.Tuple[dict]]):
         self._variants = value
 
     @property
@@ -245,6 +265,7 @@ class GeneView(QAbstractScrollArea):
         self.cursor_selects = False
 
         self.selected_exon = None
+        self._sample_count = 1
 
     @property
     def mouse_mode(self) -> int:
@@ -340,16 +361,21 @@ class GeneView(QAbstractScrollArea):
         if self.gene.variants:
             painter.save()
 
-            for variant in self.gene.variants:
+            for idx, variant in enumerate(self.gene.variants):
 
-                pos, color = variant
-                color = VARIANT_LOLLIPOP_COLOR_MAP.get(color, QColor("#FF00FF"))
+                pos = variant["pos"]
+
+                color = SO_COLOR.get(variant.get("ann.consequence"), QColor("#000000"))
+
+                # Make the lollipop appear as big as the frequence of the variant in the studied samples
+                # If sample count is wrong... TODO: make sure that the below division is always between 0 and 1...
+                thickness = (variant["count_var"] / self._sample_count) * 30
 
                 x = self._pixel_to_scroll(self._dna_to_pixel(pos)) + self.area.left()
                 pen = QPen()
                 pen.setColor(QColor(color))
                 pen.setCapStyle(Qt.RoundCap)
-                pen.setWidth(10)
+                pen.setWidth(thickness)
                 painter.setPen(pen)
                 mark = QPoint(x, self.viewport().height() / 4)
                 base = QPoint(x, self.viewport().height() / 2)
@@ -821,6 +847,12 @@ class GeneView(QAbstractScrollArea):
             self.set_scale(1)
             self.set_translation(0)
 
+    def set_sample_count(self, value):
+        self._sample_count = value
+
+    def get_sample_count(self):
+        return self._sample_count
+
 
 class GeneViewerWidget(plugin.PluginWidget):
     """Widget to show user-selected gene with its associated variants in the project.
@@ -1006,7 +1038,12 @@ class GeneViewerWidget(plugin.PluginWidget):
 
             if self.selected_transcript:
 
-                fields = ["pos", "ann.gene"]
+                fields = [
+                    "pos",  # So we can place the variant
+                    "ann.consequence",
+                    "ann.impact",
+                    "count_var",  # For the drawn size of this variant
+                ]
 
                 # TODO: What if the filters have an '$or' operator as a root ?
                 if "$and" not in filters:
@@ -1018,15 +1055,22 @@ class GeneViewerWidget(plugin.PluginWidget):
                 # if self.selected_transcript:
                 #     filters["$and"].append({"ann.transcript": self.selected_transcript})
 
-                variants = sql.get_variants(
-                    self.conn,
-                    fields,
-                    self.mainwindow.state.source,
-                    filters,
-                )
-                print(filters)
+                # Get variant info
 
-                self.view.gene.variants = [(variant["pos"], 0) for variant in variants]
+                # Set limit to None ONLY because we added a filter on selected gene (how bad can it be ?)
+                # At most, we have
+                variants = list(
+                    sql.get_variants(
+                        self.conn,
+                        fields,
+                        self.mainwindow.state.source,
+                        filters,
+                        limit=None,
+                    )
+                )
+
+                self.view.gene.variants = variants
+                self.view.set_sample_count(len(list((sql.get_samples(self.conn)))))
 
                 query = self.annotations_conn.execute(
                     f"SELECT transcript_name,tx_start,tx_end,cds_start,cds_end,exon_starts,exon_ends,gene FROM refGene WHERE gene = '{self.selected_gene}' AND transcript_name='{self.selected_transcript}'"
