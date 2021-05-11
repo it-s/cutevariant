@@ -42,6 +42,33 @@ LOGGER = logger()
 # Forget about vectors. Converting from/to list in python is really straightforward
 
 
+def overlap(interval1, interval2):
+    """
+    Given [0, 4] and [1, 10] returns (True,1, 4)
+    Given [0,10] and [15,20] return (False,0,0)
+    Thanks to https://stackoverflow.com/questions/2953967/built-in-function-for-computing-overlap-in-python
+    for saving me time !
+    """
+    _overlaps = True
+    if interval2[0] <= interval1[0] and interval1[0] <= interval2[1]:
+        start = interval1[0]
+    elif interval1[0] <= interval2[0] and interval2[0] <= interval1[1]:
+        start = interval2[0]
+    else:
+        _overlaps = False
+        start, end = 0, 0
+
+    if interval2[0] <= interval1[1] <= interval2[1]:
+        end = interval1[1]
+    elif interval1[0] <= interval2[1] <= interval1[1]:
+        end = interval2[1]
+    else:
+        _overlaps = False
+        start, end = 0, 0
+
+    return (_overlaps, start, end)
+
+
 def annotation_to_sqlite(ref_filename: str, db_filename: str):
 
     # Create databases
@@ -470,7 +497,7 @@ class GeneView(QAbstractScrollArea):
                 else:
                     painter.setBrush(QBrush(self.palette().color(QPalette.Background)))
 
-                pen = QPen(QColor("darkgray"))
+                pen = QPen(self.palette().color(QPalette.Foreground))
                 pen.setWidth(2)
                 painter.setPen(pen)
                 painter.drawEllipse(rect)
@@ -547,38 +574,12 @@ class GeneView(QAbstractScrollArea):
 
             # We draw, on every exon, the CDS rectangle (if existing)
             for i in range(self.gene.exon_count):
-
-                def overlap(interval1, interval2):
-                    """
-                    Given [0, 4] and [1, 10] returns (True,1, 4)
-                    Given [0,10] and [15,20] return (False,0,0)
-                    Thanks to https://stackoverflow.com/questions/2953967/built-in-function-for-computing-overlap-in-python
-                    for saving me time !
-                    """
-                    _overlaps = True
-                    if interval2[0] <= interval1[0] and interval1[0] <= interval2[1]:
-                        start = interval1[0]
-                    elif interval1[0] <= interval2[0] and interval2[0] <= interval1[1]:
-                        start = interval2[0]
-                    else:
-                        _overlaps = False
-                        start, end = 0, 0
-
-                    if interval2[0] <= interval1[1] <= interval2[1]:
-                        end = interval1[1]
-                    elif interval1[0] <= interval2[1] <= interval1[1]:
-                        end = interval2[1]
-                    else:
-                        _overlaps = False
-                        start, end = 0, 0
-
-                    return (_overlaps, start, end)
-
                 overlaps, start, end = overlap(
                     [self.gene.cds_start, self.gene.cds_end],
                     [self.gene.exon_starts[i], self.gene.exon_ends[i]],
                 )
 
+                # Don't draw CDS rectangle on this exon, there is none
                 if not overlaps:
                     continue
 
@@ -602,7 +603,6 @@ class GeneView(QAbstractScrollArea):
                 brush = QBrush(linearGrad)
                 painter.setBrush(brush)
                 painter.drawRect(cds_rect)
-                painter.drawText(cds_rect, Qt.AlignCenter, str(i))
 
         painter.restore()
 
