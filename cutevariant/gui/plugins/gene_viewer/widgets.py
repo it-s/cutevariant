@@ -151,13 +151,6 @@ SO_COLOR = {
     "downstream_gene_variant": "#bb55ff",
 }
 
-IMPACT_COLOR = {
-    "HIGH": "#ff4b5c",
-    "LOW": "#056674",
-    "MODERATE": "#ecad7d",
-    "MODIFIER": "#ecad7d",
-}
-
 
 class Gene:
     """Class to hold a representation of a gene, with structural data and variant annotations.
@@ -245,6 +238,71 @@ class Gene:
         self._transcript_name = value
 
 
+class DefaultLollipopDrawer:
+    IMPACT_COLOR = {
+        "HIGH": QColor("#ff4b5c"),
+        "LOW": QColor("#056674"),
+        "MODERATE": QColor("#ecad7d"),
+        "MODIFIER": QColor("#ecad7d"),
+    }
+
+    @staticmethod
+    def draw_variant(
+        variant: dict,
+        painter: QPainter,
+        x: int,
+        y_mark: int,
+        y_base: int,
+        sample_count=1,
+    ) -> None:
+
+        color = DefaultLollipopDrawer.IMPACT_COLOR.get(
+            variant.get("ann.impact"), QColor("#000000")
+        )
+
+        # Make the lollipop appear as big as the frequence of the variant in the studied samples
+        # If sample count is wrong... TODO: make sure that the below division is always between 0 and 1...
+        thickness = (
+            (variant["count_var"] / sample_count) * 20 + 10 if sample_count else 10
+        )
+        pen = QPen(color)
+        pen.setCapStyle(Qt.RoundCap)
+        pen.setWidth(thickness)
+        painter.setPen(pen)
+        mark = QPoint(x, y_mark)
+        base = QPoint(x, y_base)
+
+        painter.drawPoint(mark)
+
+        pen.setWidth(1)
+        painter.setPen(pen)
+        painter.drawLine(mark, base)
+
+    @staticmethod
+    def get_caption():
+        """Returns a list of dicts, mapping a color or a size with its actual meaning on the graph
+        Example return value:
+            [
+            {"color": QColor("#ff4b5c"), "text": "HIGH impact"},
+            {"color": QColor("#ecad7d"), "text": "MODERATE impact"},
+            {"color": QColor("#056674"), "text": "LOW impact"},
+            {"color": QColor("#ecad7d"), "text": "MODIFIER impact"},
+            {"size": 10, "text": "Really unfrequent variant"},
+            {"size": 20, "text": "Half frequent variant"},
+            {"size": 30, "text": "Most frequent variant"},
+        ]
+        """
+        return [
+            {"color": QColor("#ff4b5c"), "text": "HIGH impact"},
+            {"color": QColor("#ecad7d"), "text": "MODERATE impact"},
+            {"color": QColor("#056674"), "text": "LOW impact"},
+            {"color": QColor("#ecad7d"), "text": "MODIFIER impact"},
+            {"size": 10, "text": "Really unfrequent variant"},
+            {"size": 20, "text": "Half frequent variant"},
+            {"size": 30, "text": "Most frequent variant"},
+        ]
+
+
 # Defines available mouse modes:
 MOUSE_SELECT_MODE = 0  # Mouse clicking and dragging causes rectangle selection
 MOUSE_PAN_MODE = 1  # Mouse clicking and dragging causes view panning
@@ -293,6 +351,9 @@ class GeneView(QAbstractScrollArea):
 
         self.selected_exon = None
         self._sample_count = 1
+
+        # This class holds only static methods
+        self.lollipop_drawer = DefaultLollipopDrawer
 
     @property
     def mouse_mode(self) -> int:
@@ -364,6 +425,9 @@ class GeneView(QAbstractScrollArea):
         # Draw rect selection region
         self._draw_region(painter)
 
+        # Draw caption to explain the meaning of lollipops
+        self._draw_caption(painter)
+
         # Draw cursor line
         # if self.mouse_mode == MOUSE_SELECT_MODE:
         #     line_x = self.mapFromGlobal(QCursor.pos()).x()
@@ -384,34 +448,124 @@ class GeneView(QAbstractScrollArea):
         painter.setBrush(brush)
         painter.drawRect(intron_rect)
 
+    def _draw_caption_color_block(
+        self, painter: QPainter, color: QColor, text: str, pos: QPoint
+    ) -> typing.Tuple[int, int]:
+        """Draws a caption color block at position pos, using painter.
+
+        Args:
+            painter (QPainter): painter to draw with
+            color (QColor): color of the caption
+            text (str): caption's description
+            pos (QPoint): UpperLeft corner to draw this block at
+
+        Returns:
+            typing.Tuple[int,int]: Returns (width,height) of the block that was drawn
+        """
+        painter.save()
+
+        font_metrics = QFontMetrics(self.font())
+
+        # Draw color rectangle
+        painter.setBrush(QBrush(color))
+        painter.setPen(QPen(Qt.NoPen))
+        color_rect = QRect(pos, QSize(15, 15))
+        painter.drawRect(color_rect)
+
+        # Draw caption text
+        painter.setBrush(self.palette().color(QPalette.Background))
+        painter.setPen(QPen(QColor("grey")))
+        painter.drawText(color_rect.right(), pos.y() + 15, text)
+
+        text_bounding_rect = font_metrics.boundingRect(text)
+
+        w = color_rect.width() + text_bounding_rect.width()
+        h = max(color_rect.height(), text_bounding_rect.height())
+
+        painter.restore()
+
+        return w, h
+
+    def _draw_caption_circle_block(
+        self, painter: QPainter, size: int, text: str, pos: QPoint
+    ) -> typing.Tuple[int, int]:
+        """Draws a caption size hint block at position pos, using painter.
+
+        Args:
+            painter (QPainter): painter to draw with
+            color (QColor): color of the caption
+            text (str): caption's description
+            pos (QPoint): UpperLeft corner to draw this block at
+
+        Returns:
+            typing.Tuple[int,int]: Returns (width,height) of the block that was drawn
+        """
+        painter.save()
+
+        font_metrics = QFontMetrics(self.font())
+
+        # Draw head circle
+        painter.setBrush(QBrush(QColor("grey")))
+        painter.setPen(QPen(Qt.NoPen))
+        size_hint_head = QRect(pos + QPoint(0, 10), QSize(size / 2, size / 2))
+        painter.drawEllipse(size_hint_head)
+
+        # Draw caption text
+        painter.setBrush(self.palette().color(QPalette.Background))
+        painter.setPen(QPen(QColor("grey")))
+        painter.drawText(size_hint_head.right() + 10, pos.y() + 15, text)
+
+        text_bounding_rect = font_metrics.boundingRect(text)
+
+        w = size_hint_head.width() + text_bounding_rect.width()
+        h = max(size_hint_head.height(), text_bounding_rect.height())
+
+        painter.restore()
+
+        return w, h
+
+    def _draw_caption(self, painter: QPainter):
+        """Draws caption to explain shape and color of lollipop graph
+
+        Args:
+            painter (QPainter): painter reference to draw on its device
+        """
+        caption = self.lollipop_drawer.get_caption()
+
+        x, y = self.area.topLeft().toTuple()
+        col_width = 0
+        for idx, item in enumerate(caption):
+            if "color" in item:
+                w, h = self._draw_caption_color_block(
+                    painter, item["color"], item["text"], QPoint(x, y)
+                )
+                col_width = max(col_width, w)
+                y += h
+
+        x += col_width + 5
+        y = self.area.top()
+
+        for idx, item in enumerate(caption):
+            if "size" in item:
+                w, h = self._draw_caption_circle_block(
+                    painter, item["size"], item["text"], QPoint(x, y)
+                )
+                col_width = max(col_width, w)
+                y += h
+
     def _draw_variants(self, painter: QPainter):
         if self.gene.variants:
             painter.save()
 
-            for idx, variant in enumerate(self.gene.variants):
+            for variant in self.gene.variants:
 
                 pos = variant["pos"]
-
-                color = SO_COLOR.get(variant.get("ann.consequence"), QColor("#000000"))
-
-                # Make the lollipop appear as big as the frequence of the variant in the studied samples
-                # If sample count is wrong... TODO: make sure that the below division is always between 0 and 1...
-                thickness = (variant["count_var"] / self._sample_count) * 30
-
                 x = self._pixel_to_scroll(self._dna_to_pixel(pos)) + self.area.left()
-                pen = QPen()
-                pen.setColor(QColor(color))
-                pen.setCapStyle(Qt.RoundCap)
-                pen.setWidth(thickness)
-                painter.setPen(pen)
-                mark = QPoint(x, self.viewport().height() / 4)
-                base = QPoint(x, self.viewport().height() / 2)
-
-                painter.drawPoint(mark)
-
-                pen.setWidth(1)
-                painter.setPen(pen)
-                painter.drawLine(mark, base)
+                y_mark = self.viewport().height() / 4
+                y_base = self.viewport().height() / 2
+                self.lollipop_drawer.draw_variant(
+                    variant, painter, x, y_mark, y_base, self._sample_count
+                )
 
             painter.restore()
 
