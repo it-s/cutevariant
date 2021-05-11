@@ -254,6 +254,7 @@ class DefaultLollipopDrawer:
         y_mark: int,
         y_base: int,
         sample_count=1,
+        selected=False,
     ) -> None:
 
         color = DefaultLollipopDrawer.IMPACT_COLOR.get(
@@ -265,6 +266,9 @@ class DefaultLollipopDrawer:
         thickness = (
             (variant["count_var"] / sample_count) * 20 + 10 if sample_count else 10
         )
+        if selected:
+            thickness += 5
+            y_mark -= 30
         pen = QPen(color)
         pen.setCapStyle(Qt.RoundCap)
         pen.setWidth(thickness)
@@ -365,7 +369,7 @@ class GeneView(QAbstractScrollArea):
         if value == MOUSE_SELECT_MODE:
             self._mouse_mode = value
             QScroller.ungrabGesture(self.viewport())
-            self.setCursor(Qt.SplitHCursor)
+            self.setCursor(Qt.ArrowCursor)
         elif value == MOUSE_PAN_MODE:
             self._mouse_mode = value
             QScroller.grabGesture(self.viewport(), QScroller.LeftMouseButtonGesture)
@@ -560,11 +564,18 @@ class GeneView(QAbstractScrollArea):
             for variant in self.gene.variants:
 
                 pos = variant["pos"]
-                x = self._pixel_to_scroll(self._dna_to_pixel(pos)) + self.area.left()
+                x = self._dna_to_scroll(pos) + self.area.left()
                 y_mark = self.viewport().height() / 4
+                variant_selected = abs(self.mapFromGlobal(QCursor.pos()).x() - x) < 4
                 y_base = self.viewport().height() / 2
                 self.lollipop_drawer.draw_variant(
-                    variant, painter, x, y_mark, y_base, self._sample_count
+                    variant,
+                    painter,
+                    x,
+                    y_mark,
+                    y_base,
+                    self._sample_count,
+                    variant_selected,
                 )
 
             painter.restore()
