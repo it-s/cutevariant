@@ -147,6 +147,7 @@ class SourceEditorWidget(plugin.PluginWidget):
     """
 
     ENABLE = True
+    REFRESH_STATE_DATA = {"source"}
 
     def __init__(self, parent=None, conn=None):
         """
@@ -212,7 +213,7 @@ class SourceEditorWidget(plugin.PluginWidget):
     def on_refresh(self):
         self.view.selectionModel().blockSignals(True)
         self.model.load()
-        self.source = self.mainwindow.state.source
+        self.source = self.mainwindow.get_state_data("source")
         model_index = self.model.find_record(self.source)
         self.view.setCurrentIndex(model_index)
         self.view.selectionModel().blockSignals(False)
@@ -228,7 +229,7 @@ class SourceEditorWidget(plugin.PluginWidget):
         index = self.view.currentIndex()
         source = self.model.record(index)["name"]
 
-        self.mainwindow.state.source = source
+        self.mainwindow.set_state_data("source", source)
         self.mainwindow.refresh_plugins(sender=self)
 
     def menu_setup(self, locked_selection=False):

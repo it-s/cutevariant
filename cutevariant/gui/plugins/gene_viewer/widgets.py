@@ -1028,6 +1028,8 @@ class GeneViewerWidget(plugin.PluginWidget):
     # LOCATION = plugin.FOOTER_LOCATION
     ENABLE = True
     REFRESH_ONLY_VISIBLE = False
+    REFRESH_STATE_DATA = {"current_variant"}
+
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1120,21 +1122,16 @@ class GeneViewerWidget(plugin.PluginWidget):
         self.conn = conn
 
     def on_register(self, mainwindow: MainWindow):
-        """Connect to mainwindow's signal telling us another variant has been selected in the variant view.
-        Will soon be replaced with a connection to state instead (with the new observer pattern to come).
-
-        Args:
-            mainwindow (MainWindow): Cutevariant's mainwindow. Holds the needed properties
         """
-        self.mainwindow.selected_variant_changed.connect(
-            self.on_selected_variant_changed
-        )
+        """
+        pass
+   
 
     def on_refresh(self):
         """Called whenever this plugin needs updating."""
         self.current_variant = sql.get_one_variant(
             self.conn,
-            self.mainwindow.state.current_variant["id"],
+            self.mainwindow.get_state_data("current_variant")["id"],
             with_annotations=True,
         )
 
@@ -1180,7 +1177,7 @@ class GeneViewerWidget(plugin.PluginWidget):
         """Called when another variant is selected in the variant view"""
         self.current_variant = sql.get_one_variant(
             self.conn,
-            self.mainwindow.state.current_variant["id"],
+            self.mainwindow.get_state_data("current_variant")["id"],
             with_annotations=True,
         )
 
@@ -1198,7 +1195,7 @@ class GeneViewerWidget(plugin.PluginWidget):
 
     def update_shown_variants(self):
         if self.selected_gene:
-            filters = copy.deepcopy(self.mainwindow.state.filters)
+            filters = copy.deepcopy(self.mainwindow.get_state_data("filters"))
             self.selected_transcript = self.transcript_name_combo.currentText()
 
             if self.selected_transcript:
@@ -1228,7 +1225,7 @@ class GeneViewerWidget(plugin.PluginWidget):
                     sql.get_variants(
                         self.conn,
                         fields,
-                        self.mainwindow.state.source,
+                        self.mainwindow.get_state_data("source"),
                         filters,
                         limit=None,
                     )

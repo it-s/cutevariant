@@ -4,6 +4,7 @@ import os
 import sys
 import sqlite3
 import json
+import typing
 from pkg_resources import parse_version
 from functools import partial
 from logging import DEBUG
@@ -19,7 +20,6 @@ from cutevariant.core import get_sql_connection, get_metadatas, command
 from cutevariant.core.sql import get_database_file_name
 from cutevariant.core.writer import CsvWriter, PedWriter
 from cutevariant.gui import FIcon
-from cutevariant.gui.state import State
 from cutevariant.gui.wizards import ProjectWizard
 from cutevariant.gui.settings import SettingsDialog
 from cutevariant.gui.widgets.aboutcutevariant import AboutCutevariant
@@ -63,7 +63,13 @@ class MainWindow(QMainWindow):
         # State variable of application
         # store fields, source, filters, group_by, having data
         # Often changed by plugins
-        self.state = State()
+        self._state_data = {
+            "fields": ["chr", "pos", "ref", "alt"],
+            "source": "variants",
+            "filters": {},
+        }
+
+        self._state_data_changed = set()
 
         # Central workspace
         self.central_tab = QTabWidget()
@@ -104,6 +110,30 @@ class MainWindow(QMainWindow):
         recent = self.get_recent_projects()
         if recent and os.path.isfile(recent[0]):
             self.open(recent[0])
+
+    def set_state_data(self, key: str, value: typing.Any):
+        """set state data value from key
+
+        Args:
+            key (str): Name of the state variable
+            value (Any): a value
+        """
+        previous_state = dict(self._state_data)
+        self._state_data[key] = value
+        if previous_state != self._state_data:
+            self._state_data_changed.add(key)
+
+    def get_state_data(self, key: str) -> typing.Any:
+        """Get state data value from from key
+
+        Args:
+            key (str): Name of the state variable
+
+        Returns:
+            typing.Any: Return a value
+        """
+
+        return self._state_data.get(key, None)
 
     def add_panel(self, widget, area=Qt.LeftDockWidgetArea):
         """Add given widget to a new QDockWidget and to view menu in menubar"""
@@ -238,19 +268,33 @@ class MainWindow(QMainWindow):
     def refresh_plugins(self, sender: plugin.PluginWidget = None):
         """Refresh all widget plugins
 
-        It doesn't refresh the sender plugin, and not visible plugins.
+        It doesn't refresh a plugin if :
+
+        - the plugin is the sender
+        - the plugin is not visible
+        - the plugin specified a class variable REFRESH_STATE_DATA = ["fields"]
 
         Args:
             sender (PluginWidget): from a plugin, you can pass "self" as argument
         """
+
         for plugin_obj in self.plugins.values():
-            if plugin_obj is not sender and (
-                plugin_obj.isVisible() or plugin_obj.REFRESH_ONLY_VISIBLE is False
-            ):
+            need_refresh = (
+                plugin_obj is not sender
+                and (plugin_obj.isVisible() or not plugin_obj.REFRESH_ONLY_VISIBLE)
+                and (set(plugin_obj.REFRESH_STATE_DATA) & self._state_data_changed)
+            )
+
+            if need_refresh:
                 try:
                     plugin_obj.on_refresh()
+                    print(plugin_obj)
+
                 except Exception as e:
                     LOGGER.exception(e)
+
+        # Clear state_changed set
+        self._state_data_changed = set()
 
     def refresh_plugin(self, plugin_name: str):
         """Refresh a widget plugin identified by plugin_name
@@ -460,7 +504,7 @@ class MainWindow(QMainWindow):
         # Clear memoization cache for count_cmd
         # Clear State variable of application
         # store fields, source, filters, group_by, having data
-        self.state = State()
+        self.state = {"fields": ["chr"], "source": "variants", "filters": {}}
 
         # Load previous window state for this project (file_path being the key for the settings)
         file_path = get_database_file_name(conn)

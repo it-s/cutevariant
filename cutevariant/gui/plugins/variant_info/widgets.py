@@ -195,6 +195,7 @@ class VariantInfoWidget(PluginWidget):
     """Plugin to show all annotations of a selected variant"""
 
     ENABLE = True
+    REFRESH_STATE_DATA = {"current_variant"}
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -308,7 +309,7 @@ class VariantInfoWidget(PluginWidget):
 
     def on_refresh(self):
         """Set the current variant by the variant displayed in the GUI"""
-        self.current_variant = self.mainwindow.state.current_variant
+        self.current_variant = self.mainwindow.get_state_data("current_variant")
         self.populate()
 
     def populate(self):

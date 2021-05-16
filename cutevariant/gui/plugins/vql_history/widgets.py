@@ -329,6 +329,7 @@ class VqlHistoryWidget(plugin.PluginWidget):
     LOCATION = plugin.FOOTER_LOCATION
     ENABLE = True
     REFRESH_ONLY_VISIBLE = False
+    REFRESH_STATE_DATA = {"fields", "filters", "source"}
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -436,9 +437,9 @@ class VqlHistoryWidget(plugin.PluginWidget):
         """
 
         vql_query = build_vql_query(
-            self.mainwindow.state.fields,
-            self.mainwindow.state.source,
-            self.mainwindow.state.filters,
+            self.mainwindow.get_state_data("fields"),
+            self.mainwindow.get_state_data("source"),
+            self.mainwindow.get_state_data("filters"),
         )
 
         #  Do not store same query consecutively
@@ -472,9 +473,9 @@ class VqlHistoryWidget(plugin.PluginWidget):
         parsed_query = next(vql.parse_vql(query))
         print(parsed_query)
 
-        self.mainwindow.state.fields = parsed_query["fields"]
-        self.mainwindow.state.source = parsed_query["source"]
-        self.mainwindow.state.filters = parsed_query["filters"]
+        self.mainwindow.set_state_data("fields", parsed_query["fields"])
+        self.mainwindow.set_state_data("source", parsed_query["source"])
+        self.mainwindow.set_state_data("filters", parsed_query["filters"])
 
         self.mainwindow.refresh_plugins(sender=self)
 
