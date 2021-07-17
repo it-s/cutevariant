@@ -323,6 +323,12 @@ class TagsSettings(AbstractSettingsWidget):
             if all(isinstance(tag, dict) for tag in tags):
                 self.model.items = tags
 
+    def reset(self):
+        config: Config = self.section_widget.create_config()
+        config.reset()
+        config.save()
+        self.load()
+
     def on_add(self):
         dialog = TagDialog(parent=self)
         if dialog.exec_() == QDialog.Accepted:
@@ -384,6 +390,12 @@ class GeneralSettings(AbstractSettingsWidget):
         self.row_count_box.setValue(config.get("rows_per_page", 50))
         self.memory_box.setValue(config.get("memory_cache", 32))
 
+    def reset(self):
+        config: Config = self.section_widget.create_config()
+        config.reset()
+        config.save()
+        self.load()
+
 
 class LinkSettings(AbstractSettingsWidget):
     def __init__(self):
@@ -405,6 +417,7 @@ class LinkSettings(AbstractSettingsWidget):
         self.view.setModel(self.link_model)
         self.add_button = QPushButton(self.tr("Add"))
         self.edit_button = QPushButton(self.tr("Edit"))
+        self.reset_button = QPushButton(self.tr("Load defaults"))
         self.set_default_button = QPushButton(self.tr("Set as default"))
         self.set_default_button.setToolTip(self.tr("Double click will open this link"))
         self.remove_button = QPushButton(self.tr("Remove"))
@@ -412,6 +425,7 @@ class LinkSettings(AbstractSettingsWidget):
         v_layout = QVBoxLayout()
         v_layout.addWidget(self.add_button)
         v_layout.addWidget(self.edit_button)
+        v_layout.addWidget(self.reset_button)
         v_layout.addStretch()
         v_layout.addWidget(self.set_default_button)
         v_layout.addWidget(self.remove_button)
@@ -431,6 +445,7 @@ class LinkSettings(AbstractSettingsWidget):
         self.view.doubleClicked.connect(lambda index: self.add_url(index))
         self.set_default_button.clicked.connect(self.set_default_link)
         self.remove_button.clicked.connect(self.remove_item)
+        self.reset_button.clicked.connect(self.reset_links)
 
     def save(self):
         """Override from PageWidget"""
@@ -447,6 +462,21 @@ class LinkSettings(AbstractSettingsWidget):
 
         if "links" in config:
             for link in config["links"]:
+                self.link_model.add_link(**link)
+
+    def reset(self):
+        config: Config = self.section_widget.create_config()
+        config.reset()
+        config.save()
+        self.load()
+
+    def reset_links(self):
+        config: Config = self.section_widget.create_config()
+        config.reset()
+        default_links = config.get("links")
+        if default_links:
+            self.link_model.clear()
+            for link in default_links:
                 self.link_model.add_link(**link)
 
     def edit_item(
@@ -566,6 +596,12 @@ class MemorySettings(AbstractSettingsWidget):
     def load(self):
         """load"""
         pass
+
+    def reset(self):
+        config: Config = self.section_widget.create_config()
+        config.reset()
+        config.save()
+        self.load()
 
 
 class VariantViewSettingsWidget(PluginSettingsWidget):

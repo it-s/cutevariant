@@ -64,6 +64,7 @@ from logging import DEBUG
 from PySide2.QtWidgets import *
 from PySide2.QtCore import *  # QApplication.instance()
 from PySide2.QtGui import *  # QIcon, QPalette
+from cutevariant import config
 
 # Custom imports
 import cutevariant.commons as cm
@@ -77,7 +78,7 @@ from cutevariant import LOGGER
 class AbstractSettingsWidget(QWidget):
     """Abstract class for settings widgets
 
-    User must reimplement load() and save()
+    User must reimplement load(), save() and reset()
 
     """
 
@@ -95,6 +96,11 @@ class AbstractSettingsWidget(QWidget):
     @abstractmethod
     def load(self):
         """Load settings from QSettings"""
+        raise NotImplementedError(self.__class__.__name__)
+
+    @abstractmethod
+    def reset(self):
+        """Reset to default settings"""
         raise NotImplementedError(self.__class__.__name__)
 
 
@@ -115,6 +121,10 @@ class SectionWidget(QTabWidget):
     def load(self):
         """Call load() method of all widgets in the SectionWidget"""
         [self.widget(index).load() for index in range(self.count())]
+
+    def reset(self):
+        """Call reset() method of all widgets in the SectionWidget"""
+        [self.widget(index).reset() for index in range(self.count())]
 
 
 ################################################################################
@@ -237,15 +247,21 @@ class ProxySettingsWidget(AbstractSettingsWidget):
         self.user_edit.setText(network.get("username", ""))
         self.pass_edit.setText(network.get("password", ""))
 
+    def reset(self):
+        config = Config("app")
+        config.reset()
+        config.save()
+        self.load()
+
     def on_combo_changed(self, index):
-        """ disable formular when No proxy """
+        """disable formular when No proxy"""
         if index == 0:
             self._disable_form(True)
         else:
             self._disable_form(False)
 
     def _disable_form(self, disabled=True):
-        """ Disabled formular """
+        """Disabled formular"""
         self.host_edit.setDisabled(disabled)
         self.port_edit.setDisabled(disabled)
         self.user_edit.setDisabled(disabled)
@@ -320,6 +336,12 @@ class StyleSettingsWidget(AbstractSettingsWidget):
         style = config.get("style", {})
         style_name = style.get("theme", cm.BASIC_STYLE)
         self.styles_combobox.setCurrentIndex(available_styles.index(style_name))
+
+    def reset(self):
+        config = Config("app")
+        config.reset()
+        config.save()
+        self.load()
 
 
 class PluginsSettingsWidget(AbstractSettingsWidget):
@@ -432,6 +454,9 @@ class PluginsSettingsWidget(AbstractSettingsWidget):
 
         #     self.view.addTopLevelItem(item)
 
+    def reset(self):
+        pass
+
 
 # class PathSettingsWidget(AbstractSettingsWidget):
 #     """ Path settings where to store shared data """
@@ -532,7 +557,7 @@ class SettingsDialog(QDialog):
         self.resize(800, 400)
 
         self.button_box.button(QDialogButtonBox.SaveAll).clicked.connect(self.save_all)
-        self.button_box.button(QDialogButtonBox.Reset).clicked.connect(self.load_all)
+        self.button_box.button(QDialogButtonBox.Reset).clicked.connect(self.reset_all)
         self.button_box.button(QDialogButtonBox.Cancel).clicked.connect(self.close)
 
         # Connection events
@@ -560,11 +585,14 @@ class SettingsDialog(QDialog):
         self.accept()
 
     def load_all(self):
-        """Call load() method of all widgets"""
+        """Call reset() method of all widgets"""
         [widget.load() for widget in self.widgets]
 
+    def reset_all(self):
+        [widget.reset() for widget in self.widgets]
+
     def load_plugins(self):
-        """ Add plugins settings """
+        """Add plugins settings"""
         from cutevariant.gui import plugin
 
         for extension in plugin.find_plugins():

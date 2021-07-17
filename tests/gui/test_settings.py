@@ -1,3 +1,4 @@
+from cutevariant import config
 from tests import utils
 import pytest
 import tempfile
@@ -30,6 +31,12 @@ class PageTest(settings.AbstractSettingsWidget):
     def load(self):
         config = Config("test")
         self.value = config.get("value", None)
+
+    def reset(self):
+        config = Config("test")
+        config.reset()
+        config.save()
+        self.load()
 
 
 def test_settings_dialog(qtbot):
