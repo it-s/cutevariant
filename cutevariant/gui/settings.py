@@ -477,6 +477,12 @@ class ConfigSettingsWidget(AbstractSettingsWidget):
             if all(isinstance(conf, dict) for conf in _configs):
                 self.model.load(_configs)
 
+    def reset(self):
+        config = Config("app")
+        config.reset()
+        config.save()
+        self.load()
+
     def on_add(self):
         dialog = ConfigDialog(parent=self)
         if dialog.exec_() == QDialog.Accepted:

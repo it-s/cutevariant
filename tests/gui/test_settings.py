@@ -30,7 +30,8 @@ class PageTest(settings.AbstractSettingsWidget):
 
     def load(self):
         config = Config("test")
-        self.value = config.get("value", None)
+        # This resets in case the default value can't be found upon resetting
+        self.value = config.get("value", 32)
 
     def reset(self):
         config = Config("test")
