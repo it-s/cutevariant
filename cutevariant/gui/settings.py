@@ -59,6 +59,9 @@ import os
 import glob
 from abc import abstractmethod
 from logging import DEBUG
+import typing
+
+import copy
 
 # Qt imports
 from PySide2.QtWidgets import *
@@ -250,6 +253,233 @@ class ProxySettingsWidget(AbstractSettingsWidget):
         self.port_edit.setDisabled(disabled)
         self.user_edit.setDisabled(disabled)
         self.pass_edit.setDisabled(disabled)
+
+
+class ConfigModel(QAbstractListModel):
+    def __init__(self) -> None:
+        super().__init__()
+        self.config_list = []
+
+    def add_config(
+        self,
+        name: str,
+        file_path: str,
+    ) -> bool:
+        """Adds a config to the model.
+        Configs are dictionnaries with:
+            - name: How the user refers to the config
+            - file_path: A string indicating the path to a config preset
+
+        Args:
+            name (str): The name of the config, as displayed to the user
+            file_path (str): The path to the config preset
+
+        Returns:
+            bool: True on success
+        """
+        if any(conf["name"] == name for conf in self.config_list):
+            # If there is already a link with the same name in the model, don't add it (avoid doubles)
+            return False
+
+        new_config = {"name": name, "file_path": file_path}
+
+        # Add the new link to the model. Potentially affects current default link, so reset the whole model
+        self.beginResetModel()
+
+        self.config_list.append(new_config)
+
+        self.endResetModel()
+        return True
+
+    def remove_configs(self, indexes: typing.List[QModelIndex]) -> bool:
+        """Safely removes several configs from a list of their indexes
+
+        Args:
+            indexes (List[QModelIndex]): List of indexes to remove
+
+        Returns:
+            bool: True on success
+        """
+        rows = sorted([index.row() for index in indexes], reverse=True)
+        for row in rows:
+            self.beginRemoveRows(QModelIndex(), row, row)
+            del self.config_list[row]
+            self.endRemoveRows()
+        return True
+
+    def remove_config(self, index: QModelIndex):
+        return self.remove_configs([index])
+
+    def edit_config(
+        self,
+        index: QModelIndex,
+        name: str,
+        file_path: str,
+    ):
+
+        edited_config = {
+            "name": name,
+            "file_path": file_path,
+        }
+
+        # Add the new link to the model. Potentially affects current default link, so reset the whole model
+        self.beginResetModel()
+        self.config_list[index.row()] = edited_config
+        self.endResetModel()
+        return True
+
+    def load(self, configs: typing.List[dict]):
+        self.beginResetModel()
+        self.config_list.clear()
+        for conf in configs:
+            self.config_list.append(copy.deepcopy(conf))
+        self.endResetModel()
+
+    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
+        return len(self.config_list)
+
+    def clear(self):
+        self.beginResetModel()
+        self.config_list.clear()
+        self.endResetModel()
+
+    def data(self, index: QModelIndex, role: int):
+        if index.row() < 0 or index.row() >= self.rowCount():
+            return
+
+        if role == Qt.DisplayRole or role == Qt.EditRole:
+            return self.config_list[index.row()]["name"]
+
+        if role == Qt.ToolTipRole:
+            return self.config_list[index.row()]["file_path"]
+
+    def setData(self, index: QModelIndex, value: typing.Any, role: int) -> bool:
+        if isinstance(value, str) and role == Qt.EditRole:
+            self.config_list[index.row()]["name"] = value
+
+    def flags(self, index: QModelIndex) -> Qt.ItemFlags:
+        return super().flags(index) | Qt.ItemIsEditable
+
+
+class ConfigDialog(QDialog):
+    def __init__(self, name="", file_path="", parent: QWidget = None) -> None:
+        super().__init__(parent=parent)
+
+        self.setWindowTitle(self.tr("Edit config"))
+
+        self._layout = QVBoxLayout(self)
+
+        self._button_box = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        self._button_box.accepted.connect(self.accept)
+        self._button_box.rejected.connect(self.reject)
+
+        self.form_layout = QFormLayout()
+        self.name = QLineEdit(self)
+        self.path_le = QLineEdit(self)
+
+        self.name.setPlaceholderText(self.tr("Name"))
+        self.path_le.setPlaceholderText(self.tr("File path"))
+        self.edit_path_action = self.path_le.addAction(
+            FIcon(0xF1080), QLineEdit.TrailingPosition
+        )
+        self.edit_path_action.triggered.connect(self.edit_path)
+
+        # When we click, we change tag's color
+
+        self.form_layout.addRow(self.tr("Name:"), self.name)
+        self.form_layout.addRow(self.tr("File path:"), self.path_le)
+
+        self._layout.addLayout(self.form_layout)
+        self._layout.addWidget(self._button_box)
+
+        self.set_conf(name, file_path)
+
+    def set_conf(self, name: str = "", file_path: str = ""):
+        self.name.setText(name)
+        self.path_le.setText(file_path)
+
+    def get_conf(self) -> dict:
+        return {"name": self.name.text(), "file_path": self.path_le.text()}
+
+    def edit_path(self):
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, self.tr("Please choose a configuration file"), QDir.homePath()
+        )
+        if file_name:
+            self.path_le.setText(file_name)
+
+
+class ConfigSettingsWidget(AbstractSettingsWidget):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Edit configurations")
+        self.label = QLabel(
+            """
+            Add/Edit/Remove configuration presets.
+            These will be available in the 'Reset settings' popup menu.
+            """
+        )
+        self.setWindowIcon(FIcon(0xF0493))
+        self.view = QListView()
+        self.model = ConfigModel()
+
+        self.view.setModel(self.model)
+        self.view.setSelectionMode(QAbstractItemView.SingleSelection)
+
+        self.add_button = QPushButton(self.tr("Add"))
+        self.rem_button = QPushButton(self.tr("Remove"))
+        self.clear_button = QPushButton(self.tr("Clear"))
+        self.edit_button = QPushButton(self.tr("Edit"))
+
+        h_layout = QHBoxLayout(self)
+        h_layout.addWidget(self.view)
+        v_layout = QVBoxLayout()
+        v_layout.addWidget(self.add_button)
+        v_layout.addWidget(self.edit_button)
+        v_layout.addWidget(self.rem_button)
+        v_layout.addStretch()
+        v_layout.addWidget(self.clear_button)
+        h_layout.addLayout(v_layout)
+
+        self.add_button.clicked.connect(self.on_add)
+        self.rem_button.clicked.connect(self.on_rem)
+        self.clear_button.clicked.connect(self.on_clear)
+        self.edit_button.clicked.connect(self.on_edit)
+
+    def save(self):
+        config = Config("app")
+        config["configs"] = self.model.config_list
+        config.save()
+
+    def load(self):
+        config: Config = Config("app")
+        _configs = config.get("configs", [])
+        if isinstance(_configs, list):
+            if all(isinstance(conf, dict) for conf in _configs):
+                self.model.load(_configs)
+
+    def on_add(self):
+        dialog = ConfigDialog(parent=self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.model.add_config(**dialog.get_conf())
+
+    def on_edit(self):
+        index = self.view.currentIndex()
+        name, file_path = index.data(Qt.DisplayRole), index.data(Qt.ToolTipRole)
+        dialog = ConfigDialog(name, file_path)
+
+        if dialog.exec_() == QDialog.Accepted:
+            _conf = dialog.get_conf()
+            self.model.edit_config(index, name, file_path)
+
+    def on_rem(self):
+        self.model.remove_rows(self.view.selectionModel().selectedRows())
+
+    def on_clear(self):
+        self.model.clear()
 
 
 class StyleSettingsWidget(AbstractSettingsWidget):
@@ -515,6 +745,7 @@ class SettingsDialog(QDialog):
 
         general_settings.add_page(ProxySettingsWidget())
         general_settings.add_page(StyleSettingsWidget())
+        general_settings.add_page(ConfigSettingsWidget())
 
         # Activation status of plugins
         plugin_settings = PluginsSettingsWidget()
