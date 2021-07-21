@@ -427,6 +427,18 @@ class ConfigDialog(QDialog):
         if file_name:
             self.path_le.setText(file_name)
 
+    def accept(self) -> None:
+        if self.name.text() == DEFAULT_CONFIG_NAME:
+            QMessageBox.warning(
+                self,
+                self.tr("Reserved name"),
+                self.tr(
+                    f"{DEFAULT_CONFIG_NAME} is a reserved name, you cannot use it as a config name"
+                ),
+            )
+            return
+        return super().accept()
+
 
 class ConfigSettingsWidget(AbstractSettingsWidget):
     def __init__(self):
@@ -462,7 +474,7 @@ class ConfigSettingsWidget(AbstractSettingsWidget):
         h_layout.addLayout(v_layout)
 
         self.add_button.clicked.connect(self.on_add)
-        self.rem_button.clicked.connect(self.on_rem)
+        self.rem_button.clicked.connect(self.on_remove)
         self.clear_button.clicked.connect(self.on_clear)
         self.edit_button.clicked.connect(self.on_edit)
 
@@ -495,10 +507,10 @@ class ConfigSettingsWidget(AbstractSettingsWidget):
 
         if dialog.exec_() == QDialog.Accepted:
             _conf = dialog.get_conf()
-            self.model.edit_config(index, name, file_path)
+            self.model.edit_config(index, _conf["name"], _conf["file_path"])
 
-    def on_rem(self):
-        self.model.remove_rows(self.view.selectionModel().selectedRows())
+    def on_remove(self):
+        self.model.remove_configs(self.view.selectionModel().selectedRows())
 
     def on_clear(self):
         self.model.clear()
@@ -847,6 +859,9 @@ class SettingsDialog(QDialog):
                 act: QAction = menu.addAction(conf_name)
                 # Reset all will use file_path contained in action's data to reset settings
                 act.setData(conf_file)
+                # Useless, no tooltip in popup menus apparently
+                act.setToolTip(conf_file)
+                act.setIcon(FIcon(0xF0004))
                 act.triggered.connect(self.reset_all)
         return menu
 
@@ -886,6 +901,24 @@ class SettingsDialog(QDialog):
                     widget.setWindowIcon(FIcon(0xF0431))
 
                 self.add_section(widget)
+
+    def reject(self) -> None:
+        """Upon closing, or if the user presses cancel, ask for a confirmation before actually closing"""
+        if (
+            QMessageBox.question(
+                self,
+                self.tr("Closing"),
+                self.tr(
+                    "Your changes to the settings will not be saved. Close anyway?"
+                ),
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            == QMessageBox.No
+        ):
+            # Will not close
+            return
+        # Will close (the base implementation)
+        return super().reject()
 
 
 if __name__ == "__main__":
