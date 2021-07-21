@@ -251,6 +251,10 @@ class VariantModel(QAbstractTableModel):
                 value = str(self.variant(index.row())[column_name])
                 return value
 
+            if role == Qt.DecorationRole:
+                if column_name == "tags":
+                    return QColor("red")
+
         return None
 
     def headerData(self, section, orientation=Qt.Horizontal, role=Qt.DisplayRole):
@@ -981,6 +985,7 @@ class VariantView(QWidget):
 
     def set_formatter(self, formatter):
         self.delegate.formatter = formatter
+        self.delegate.formatter.refresh()
         self.view.reset()
 
     @property
@@ -1299,21 +1304,35 @@ class VariantView(QWidget):
         Todo:
             Use custom sqlite type ?
         """
-        tags = "&".join(tags)
-        unique_ids = set()
-        for index in self.view.selectionModel().selectedRows():
-            if not index.isValid():
-                continue
 
-            # Get variant id
+        update_data = {}
+
+        is_multi_selection = len(self.view.selectionModel().selectedRows()) > 1
+
+        for index in self.view.selectionModel().selectedRows():
+
             variant = self.model.variants[index.row()]
             variant_id = variant["id"]
+            update_data[index.row()] = copy.copy(tags)
 
-            if variant_id in unique_ids:
-                continue
-            unique_ids.add(variant_id)
-            update_data = {"tags": tags}
-            self.model.update_variant(index.row(), update_data)
+            if is_multi_selection:
+                # Keep previous tags
+                current_variant = sql.get_one_variant(self.conn, variant_id)
+                current_tag = current_variant.get("tags", "")
+
+                if current_tag:
+                    update_data[index.row()] += current_tag.split("&")
+
+        # Write to sql
+        print(update_data)
+        for row, data in update_data.items():
+            variant_id = self.model.variants[row]["id"]
+            print(row, variant_id, data)
+            sql_tags = "&".join(set(data))
+            if not sql_tags:
+                sql_tags = None
+
+            self.model.update_variant(row, {"tags": sql_tags})
 
     def edit_comment(self, index: QModelIndex):
         """Allow a user to add a comment for the selected variant"""
@@ -1509,6 +1528,17 @@ class TagsModel(QAbstractListModel):
 
         self.endResetModel()
 
+    def set_checked(self, checked_tags: list):
+
+        self.beginResetModel()
+        for tag in self.items:
+            if tag["name"] in checked_tags:
+                tag["checked"] = True
+            else:
+                tag["checked"] = False
+
+        self.endResetModel()
+
     def clear(self):
         self.beginResetModel()
         self.items = []
@@ -1521,6 +1551,7 @@ class TagsModel(QAbstractListModel):
 class TagsWidget(QWidget):
 
     tags_selected = Signal(list)
+    visibility_changed = Signal()
 
     def __init__(self, parent=None):
         super().__init__()
@@ -1532,8 +1563,6 @@ class TagsWidget(QWidget):
         self._model = TagsModel()
         self._proxy_model = QSortFilterProxyModel()
         self._proxy_model.setSourceModel(self._model)
-        self._model.load()
-
         self._listview.setModel(self._proxy_model)
 
         vlayout = QVBoxLayout()
@@ -1549,10 +1578,15 @@ class TagsWidget(QWidget):
         self.tags_selected.emit(self._model.checked_tags())
         self.parent().close()
 
+    def set_checked(self, tags):
+        self._model.set_checked(tags)
+
     def showEvent(self, event):
         """override"""
+
         super().showEvent(event)
         self._model.load()
+        self.visibility_changed.emit()
 
 
 class VariantViewWidget(plugin.PluginWidget):
@@ -1606,9 +1640,9 @@ class VariantViewWidget(plugin.PluginWidget):
         self._tag_action_menu = QMenu()
         self._tag_widget = TagsWidget()
         self._tag_action.setMenu(self._tag_action_menu)
-
         self.widget_action = QWidgetAction(self)
         self.widget_action.setDefaultWidget(self._tag_widget)
+        self._tag_widget.visibility_changed.connect(self.on_tag_widget_show)
 
         self._tag_action_menu.addAction(self.widget_action)
         self._tag_widget.tags_selected.connect(self.main_right_pane.update_tags)
@@ -1668,6 +1702,16 @@ class VariantViewWidget(plugin.PluginWidget):
 
         self.main_right_pane.error_raised.connect(self.set_message)
         self.main_right_pane.model.load_finished.connect(self.on_load_finished)
+
+    def on_tag_widget_show(self):
+        """ Triggered when tagDialog is displayed """
+        selected_rows = self.main_right_pane.view.selectionModel().selectedRows()
+        if len(selected_rows) == 1:
+            index = selected_rows[0]
+            variant_id = self.main_right_pane.model.variant(index.row())["id"]
+            variant = sql.get_one_variant(self.conn, variant_id)
+            if variant["tags"]:
+                self._tag_widget.set_checked(variant["tags"].split("&"))
 
     def on_load_finished(self):
         """Triggered when variant load is finished

@@ -12,13 +12,15 @@ from PySide2.QtGui import (
     QPalette,
     QPixmap,
 )
-from PySide2.QtCore import Qt, QModelIndex, QRect, QUrl
+from PySide2.QtCore import Qt, QModelIndex, QRect, QUrl, QPoint
 from PySide2.QtWidgets import QStyleOptionViewItem, QStyle
 
 # Custom imports
 from cutevariant.gui.formatter import Formatter
 from cutevariant.gui import FIcon
 import cutevariant.commons as cm
+
+from cutevariant.config import Config
 
 
 class CutestyleFormatter(Formatter):
@@ -57,6 +59,13 @@ class CutestyleFormatter(Formatter):
     # Cache genotype icons
     # Values in gt field as keys (str), FIcon as values
     GENOTYPE_ICONS = {key: FIcon(val) for key, val in cm.GENOTYPE_ICONS.items()}
+
+    def __init__(self):
+        self.refresh()
+
+    def refresh(self):
+        config = Config("variant_view")
+        self.TAGS_COLOR = {tag["name"]: tag["color"] for tag in config.get("tags", [])}
 
     def format(self, field: str, value: str, option, is_selected):
 
@@ -119,20 +128,49 @@ class CutestyleFormatter(Formatter):
             values = str(value).split("&")
             font = QFont()
             metrics = QFontMetrics(font)
-            x = option.rect.x() + 5
+            x = 0
             # y = option.rect.center().y()
             pix = QPixmap(option.rect.size())
             pix.fill(Qt.transparent)
             painter = QPainter(pix)
-            for value in values:
+            for index, value in enumerate(values):
                 width = metrics.width(value)
                 height = metrics.height()
-                rect = QRect(0, 0, width + 15, height + 10)
-                # rect.moveCenter(option.rect.center())
-                # rect.moveLeft(x)
+                rect = QRect(x, 2, width + 15, height + 10)
+
                 painter.setFont(font)
                 # painter.setClipRect(option.rect, Qt.IntersectClip)
                 painter.setBrush(QBrush(QColor(self.SO_COLOR.get(value, "#90d4f7"))))
+                painter.setPen(Qt.NoPen)
+                painter.drawRoundedRect(rect, 3, 3)
+                painter.setPen(QPen(QColor("white")))
+                painter.drawText(rect, Qt.AlignCenter | Qt.AlignVCenter, value)
+                x += width + 20
+
+            return {"pixmap": pix}
+
+        if field == "tags":
+            if value is None or value == "":
+                return {}
+
+            values = str(value).split("&")
+            font = QFont()
+            metrics = QFontMetrics(font)
+            x = 0
+            # y = option.rect.center().y()
+            pix = QPixmap(option.rect.size())
+            pix.fill(Qt.transparent)
+            painter = QPainter(pix)
+            for index, value in enumerate(values):
+                width = metrics.width(value)
+                height = metrics.height()
+                rect = QRect(x, 2, width + 15, height + 10)
+
+                painter.setFont(font)
+                # painter.setClipRect(option.rect, Qt.IntersectClip)
+                painter.setBrush(
+                    QBrush(QColor(self.TAGS_COLOR.get(value, "lightgray")))
+                )
                 painter.setPen(Qt.NoPen)
                 painter.drawRoundedRect(rect, 3, 3)
                 painter.setPen(QPen(QColor("white")))

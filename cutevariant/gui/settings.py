@@ -222,7 +222,7 @@ class ProxySettingsWidget(AbstractSettingsWidget):
         network["host"] = self.host_edit.text()
         network["port"] = self.port_edit.value()
         network["username"] = self.user_edit.text()
-        network["password"] = self.user_edit.text()
+        network["password"] = self.pass_edit.text()
 
         config["network"] = network
         config.save()
