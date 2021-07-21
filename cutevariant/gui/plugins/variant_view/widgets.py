@@ -1704,7 +1704,7 @@ class VariantViewWidget(plugin.PluginWidget):
         self.main_right_pane.model.load_finished.connect(self.on_load_finished)
 
     def on_tag_widget_show(self):
-        """ Triggered when tagDialog is displayed """
+        """Triggered when tagDialog is displayed"""
         selected_rows = self.main_right_pane.view.selectionModel().selectedRows()
         if len(selected_rows) == 1:
             index = selected_rows[0]

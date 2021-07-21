@@ -77,6 +77,8 @@ from cutevariant.gui import network, style, widgets
 
 from cutevariant import LOGGER
 
+DEFAULT_CONFIG_NAME = "Factory settings"
+
 
 class AbstractSettingsWidget(QWidget):
     """Abstract class for settings widgets
@@ -102,7 +104,7 @@ class AbstractSettingsWidget(QWidget):
         raise NotImplementedError(self.__class__.__name__)
 
     @abstractmethod
-    def reset(self):
+    def reset(self, config_file: str):
         """Reset to default settings"""
         raise NotImplementedError(self.__class__.__name__)
 
@@ -125,9 +127,9 @@ class SectionWidget(QTabWidget):
         """Call load() method of all widgets in the SectionWidget"""
         [self.widget(index).load() for index in range(self.count())]
 
-    def reset(self):
+    def reset(self, config_file: str):
         """Call reset() method of all widgets in the SectionWidget"""
-        [self.widget(index).reset() for index in range(self.count())]
+        [self.widget(index).reset(config_file) for index in range(self.count())]
 
 
 ################################################################################
@@ -250,9 +252,8 @@ class ProxySettingsWidget(AbstractSettingsWidget):
         self.user_edit.setText(network.get("username", ""))
         self.pass_edit.setText(network.get("password", ""))
 
-    def reset(self):
-        config = Config("app")
-        config.reset()
+    def reset(self, config_file: str):
+        config = Config("app", config_file)
         config.save()
         self.load()
 
@@ -477,9 +478,8 @@ class ConfigSettingsWidget(AbstractSettingsWidget):
             if all(isinstance(conf, dict) for conf in _configs):
                 self.model.load(_configs)
 
-    def reset(self):
-        config = Config("app")
-        config.reset()
+    def reset(self, config_file: str):
+        config = Config("app", config_file)
         config.save()
         self.load()
 
@@ -573,9 +573,8 @@ class StyleSettingsWidget(AbstractSettingsWidget):
         style_name = style.get("theme", cm.BASIC_STYLE)
         self.styles_combobox.setCurrentIndex(available_styles.index(style_name))
 
-    def reset(self):
-        config = Config("app")
-        config.reset()
+    def reset(self, config_file: str):
+        config = Config("app", config_file)
         config.save()
         self.load()
 
@@ -690,7 +689,7 @@ class PluginsSettingsWidget(AbstractSettingsWidget):
 
         #     self.view.addTopLevelItem(item)
 
-    def reset(self):
+    def reset(self, config_file: str):
         pass
 
 
@@ -750,6 +749,13 @@ class SettingsDialog(QDialog):
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.SaveAll | QDialogButtonBox.Cancel | QDialogButtonBox.Reset
         )
+        self.button_box.button(QDialogButtonBox.Cancel).clicked.connect(self.close)
+        self.button_box.button(QDialogButtonBox.Reset).clicked.connect(self.reset_all)
+        self.button_box.button(QDialogButtonBox.Reset).setMenu(
+            self._create_reset_menu()
+        )
+
+        self.button_box.button(QDialogButtonBox.SaveAll).clicked.connect(self.save_all)
 
         self.list_widget.setFixedWidth(200)
         self.list_widget.setIconSize(QSize(32, 32))
@@ -761,6 +767,7 @@ class SettingsDialog(QDialog):
         v_layout = QVBoxLayout()
         v_layout.addLayout(h_layout)
         v_layout.addWidget(self.button_box)
+
         self.setLayout(v_layout)
 
         # Instantiate subwidgets on panels
@@ -793,10 +800,6 @@ class SettingsDialog(QDialog):
 
         self.resize(800, 400)
 
-        self.button_box.button(QDialogButtonBox.SaveAll).clicked.connect(self.save_all)
-        self.button_box.button(QDialogButtonBox.Reset).clicked.connect(self.reset_all)
-        self.button_box.button(QDialogButtonBox.Cancel).clicked.connect(self.close)
-
         # Connection events
         self.list_widget.currentRowChanged.connect(self.stack_widget.setCurrentIndex)
 
@@ -825,8 +828,38 @@ class SettingsDialog(QDialog):
         """Call reset() method of all widgets"""
         [widget.load() for widget in self.widgets]
 
+    def _create_reset_menu(self):
+        """Creates the dropdown menu to be popped up when the user presses reset.
+        Each action in this menu will be connected to self's reset_all slot and should bring the file_name with them
+        """
+        menu = QMenu(self)
+        config = Config("app")
+        if "configs" in config:
+
+            # Create 'Reset to factory settings' action
+            reset_hard_act: QAction = menu.addAction(DEFAULT_CONFIG_NAME)
+            reset_hard_act.setIcon(FIcon(0xF006E))
+            reset_hard_act.triggered.connect(self.reset_all)
+
+            all_configs = config["configs"]
+            for conf in all_configs:
+                conf_name, conf_file = conf["name"], conf["file_path"]
+                act: QAction = menu.addAction(conf_name)
+                # Reset all will use file_path contained in action's data to reset settings
+                act.setData(conf_file)
+                act.triggered.connect(self.reset_all)
+        return menu
+
     def reset_all(self):
-        [widget.reset() for widget in self.widgets]
+        """Called either from a QPushButton or from the reset drop-down menu"""
+        if isinstance(self.sender(), QAction):
+            config_file = None  # Exactly the same as Conf().default_config_path()
+            reset_act: QAction = self.sender()
+            if reset_act.data():
+                config_file = reset_act.data()
+        else:
+            config_file = None  # Exactly the same as Conf().default_config_path()
+        [widget.reset(config_file) for widget in self.widgets]
 
     def load_plugins(self):
         """Add plugins settings"""

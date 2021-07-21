@@ -328,6 +328,9 @@ class TagsSettings(AbstractSettingsWidget):
         self.edit_button.clicked.connect(self.on_edit)
 
     def save(self):
+        """Saving is always in the standard config path.
+        On the contrary, reset can load from any file
+        """
 
         config = self.section_widget.create_config()
         config["tags"] = self.model.items
@@ -340,8 +343,8 @@ class TagsSettings(AbstractSettingsWidget):
             if all(isinstance(tag, dict) for tag in tags):
                 self.model.items = tags
 
-    def reset(self):
-        config: Config = self.section_widget.create_config()
+    def reset(self, config_file: str):
+        config: Config = self.section_widget.create_config(config_file)
         config.reset()
         config.save()
         self.load()
@@ -400,8 +403,8 @@ class GeneralSettings(AbstractSettingsWidget):
         self.row_count_box.setValue(config.get("rows_per_page", 50))
         self.memory_box.setValue(config.get("memory_cache", 32))
 
-    def reset(self):
-        config: Config = self.section_widget.create_config()
+    def reset(self, config_file: str):
+        config: Config = self.section_widget.create_config(config_file)
         config.reset()
         config.save()
         self.load()
@@ -474,8 +477,8 @@ class LinkSettings(AbstractSettingsWidget):
             for link in config["links"]:
                 self.link_model.add_link(**link)
 
-    def reset(self):
-        config: Config = self.section_widget.create_config()
+    def reset(self, config_file: str):
+        config: Config = self.section_widget.create_config(config_file)
         config.reset()
         config.save()
         self.load()
@@ -607,8 +610,8 @@ class MemorySettings(AbstractSettingsWidget):
         """load"""
         pass
 
-    def reset(self):
-        config: Config = self.section_widget.create_config()
+    def reset(self, config_file: str):
+        config: Config = self.section_widget.create_config(config_file)
         config.reset()
         config.save()
         self.load()

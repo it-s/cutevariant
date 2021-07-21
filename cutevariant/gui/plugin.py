@@ -189,11 +189,11 @@ class PluginWidget(QWidget):
         pass
 
     def to_json(self):
-        """ serialize plugin state into dict"""
+        """serialize plugin state into dict"""
         return {}
 
     def from_json(self, json: dict):
-        """ read plugin state from json dict """
+        """read plugin state from json dict"""
         pass
 
     def showEvent(self, event):
@@ -223,8 +223,8 @@ class PluginWidget(QWidget):
     def plugin_name(self):
         return cm.camel_to_snake(self.__class__.__name__.replace("Widget", ""))
 
-    def create_config(self):
-        return Config(self.plugin_name)
+    def create_config(self, config_path: str = None):
+        return Config(self.plugin_name, config_path)
 
 
 class PluginDialog(QDialog):
@@ -248,8 +248,8 @@ class PluginDialog(QDialog):
     def plugin_name(self):
         return cm.camel_to_snake(self.__class__.__name__.replace("Dialog", ""))
 
-    def create_config(self):
-        return Config(self.plugin_name)
+    def create_config(self, config_path: str = None):
+        return Config(self.plugin_name, config_path)
 
 
 class PluginSettingsWidget(settings.SectionWidget):
@@ -276,8 +276,8 @@ class PluginSettingsWidget(settings.SectionWidget):
     def plugin_name(self):
         return cm.camel_to_snake(self.__class__.__name__.replace("SettingsWidget", ""))
 
-    def create_config(self):
-        return Config(self.plugin_name)
+    def create_config(self, config_path: str = None):
+        return Config(self.plugin_name, config_path)
 
 
 ################################################################################
