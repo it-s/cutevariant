@@ -348,8 +348,10 @@ class ConfigModel(QAbstractListModel):
     def load(self, configs: typing.List[dict]):
         self.beginResetModel()
         self.config_list.clear()
-        for conf in configs:
-            self.config_list.append(copy.deepcopy(conf))
+        for i, conf in enumerate(configs):
+            if not os.path.isfile(conf["file_path"]):
+                self.config_list.append(copy.deepcopy(conf))
+                self.config_list[i]["color"] = "#FF0000"
         self.endResetModel()
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
@@ -369,6 +371,10 @@ class ConfigModel(QAbstractListModel):
 
         if role == Qt.ToolTipRole:
             return self.config_list[index.row()]["file_path"]
+
+        if role == Qt.ForegroundRole:
+            if "color" in self.config_list[index.row()]:
+                return QColor(self.config_list[index.row()]["color"])
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int) -> bool:
         if isinstance(value, str) and role == Qt.EditRole:
@@ -436,6 +442,27 @@ class ConfigDialog(QDialog):
                     f"{DEFAULT_CONFIG_NAME} is a reserved name, you cannot use it as a config name"
                 ),
             )
+            # Return without accepting, form is considered invalid
+            return
+        if not os.path.isfile(self.path_le.text()):
+            QMessageBox.warning(
+                self,
+                self.tr("File not found"),
+                self.tr(f"File {self.path_le.text()} does not exist"),
+            )
+            # Return without accepting, form is considered invalid
+            return
+
+        # Use realpath so that even if one creates a symlink to default_config.yml, it is not used as a different config
+        if os.path.realpath(self.path_le.text()) == Config().default_config_path:
+            QMessageBox.warning(
+                self,
+                self.tr("Invalid file name"),
+                self.tr(
+                    f"File {self.path_le.text()} is a reserved file name. It corresponds to a Factory reset."
+                ),
+            )
+            # Return without accepting, form is considered invalid
             return
         return super().accept()
 
@@ -853,9 +880,14 @@ class SettingsDialog(QDialog):
             reset_hard_act.setIcon(FIcon(0xF006E))
             reset_hard_act.triggered.connect(self.reset_all)
 
+            # Record configs that do not contain valid file name. To avoid errors while loading file
+            not_found_configs = []
             all_configs = config["configs"]
             for conf in all_configs:
                 conf_name, conf_file = conf["name"], conf["file_path"]
+                if not os.path.isfile(conf_file):
+                    not_found_configs.append((conf_name, conf_file))
+                    continue
                 act: QAction = menu.addAction(conf_name)
                 # Reset all will use file_path contained in action's data to reset settings
                 act.setData(conf_file)
@@ -863,6 +895,13 @@ class SettingsDialog(QDialog):
                 act.setToolTip(conf_file)
                 act.setIcon(FIcon(0xF0004))
                 act.triggered.connect(self.reset_all)
+            if not_found_configs:
+                for not_found in not_found_configs:
+                    LOGGER.debug(
+                        "Could not find config named %s (%s does not name a file)",
+                        not_found[0],
+                        not_found[1],
+                    )
         return menu
 
     def reset_all(self):
