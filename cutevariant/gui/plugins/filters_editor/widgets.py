@@ -167,7 +167,7 @@ class FiltersPresetModel(QAbstractListModel):
         self.config_path = config_path
         self._presets = []
 
-    def data(self, index: QModelIndex, role: int) -> typing.Any:
+    def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> typing.Any:
         if role == Qt.DisplayRole or role == Qt.EditRole:
             if index.row() >= 0 and index.row() < self.rowCount():
                 return self._presets[index.row()][0]

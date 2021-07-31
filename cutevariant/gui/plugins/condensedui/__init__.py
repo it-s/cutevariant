@@ -1,0 +1,5 @@
+__title__ = "CondensedUI"
+__description__ = "A condensed UI design"
+__long_description__ = """A user-friendly, presets-based alternative to VQL querying."""
+__author__ = "Charles"
+__version__ = "1.0.0"

@@ -347,10 +347,11 @@ class TagsSettings(AbstractSettingsWidget):
 
     def on_edit(self):
         index = self.view.currentIndex()
-        name = index.data(Qt.DisplayRole)
-        description = index.data(Qt.ToolTipRole)
-        color = index.data(Qt.DecorationRole).name()
-        dialog = TagDialog(name, description, color)
+        if index and index.isValid():
+            name = index.data(Qt.DisplayRole)
+            description = index.data(Qt.ToolTipRole)
+            color = index.data(Qt.DecorationRole).name()
+            dialog = TagDialog(name, description, color)
 
         if dialog.exec_() == QDialog.Accepted:
             tag = dialog.get_tag()

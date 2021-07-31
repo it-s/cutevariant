@@ -76,6 +76,7 @@ class GroupbyModel(QAbstractTableModel):
         self._source = "variants"
         self._filters = {}
         self._order_by_count = True
+        self._order_desc = True
 
         self.is_loading = False
 
